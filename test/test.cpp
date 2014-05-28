@@ -59,6 +59,20 @@ void print(string filename, graph_t &G, edge_cycle_map_t &ec_map, vertex_name_ma
                                                      edge_attr));
 		}
 
+// Taken from here: http://stackoverflow.com/questions/478898/how-to-execute-a-command-and-get-output-of-command-within-c
+std::string exec(char* cmd) {
+		strcat(cmd, " 2>&1");
+    FILE* pipe = popen(cmd, "r");
+    if (!pipe) return "ERROR";
+    char buffer[128];
+    std::string result = "";
+    while(!feof(pipe)) {
+    	if(fgets(buffer, 128, pipe) != NULL)
+    		result += buffer;
+    }
+    pclose(pipe);
+    return result;
+}
 //template<typename graph_t, typename vertex_cycle_map_t, typename edge_cycle_map_t>
 //void read_two_factor(string filename, graph_t &g, vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map){
 template<typename graph_t>
@@ -278,10 +292,15 @@ void test_extend(string filename){
 	property_map<Graph, edge_in_two_factor_t>::type ec_map = get(edge_in_two_factor, g);
 	
 	print("twofactor.dot", g, ec_map);
+	char cmd1[] = "dot -Kneato -Tpng -o twofactor.png twofactor.dot";
+	exec(cmd1);
+	
 	cout << "Starting...\n";
 	extend_cycle(vc_map, ec_map, g);
 	
 	print("extended.dot", g, ec_map);
+	char cmd2[] = "dot -Kneato -Tpng -o extended.png extended.dot";
+	exec(cmd2);
 }
 
 int main(int argc,char* argv[]){
