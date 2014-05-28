@@ -3,10 +3,12 @@
 
 #include <utility> 
 #include <vector>
+#include <unistd.h>
 #include "boost/config.hpp" // put this first to suppress some VC++ warnings
 
 #include <boost/utility.hpp>
 #include <boost/graph/graphviz.hpp>
+#include <boost/graph/property_maps/null_property_map.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/graph_utility.hpp>
 
@@ -253,6 +255,7 @@ bool star_of_david(graph_t &g){
 	}
 	return true;
 }
+
 template<typename vertex_cycle_map_t, typename graph_t>
 list<typename graph_traits<graph_t>::vertex_descriptor > cycle_extendors(vertex_cycle_map_t &vc_map, graph_t &g){
 	typedef typename graph_traits<graph_t>::vertex_descriptor vertex_t;
@@ -296,10 +299,7 @@ bool triangulate(vertex_t v, vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_ma
 	pair<vertex_t, vertex_t> shared;
 	for (tie(vi, vi_end) = adjacent_vertices(v, g); vi != vi_end; ++vi){
 		shared = shared_neighbors(edge(v, *vi, g).first, g);
-		cout << "Shared neighbors of (" << get(vertex_name, g, v) << "," << get(vertex_name, g, *vi) << ") are " << get(vertex_name, g, shared.first) << " and " << get(vertex_name, g, shared.second) << endl;
 		if (vc_map[shared.first] && ec_map[edge(*vi, shared.first, g).first]){
-				//cout << "Triangulating " << v << " with " << edge(*vi, shared.first, g).first << endl;
-				cout << "Triangulating " << get(vertex_name, g, v) << " with (" << get(vertex_name, g, *vi) << "," << get(vertex_name, g, shared.first) << ")\n";
 				vc_map[v] = true;
 				ec_map[edge(*vi, shared.first, g).first] = false;
 				ec_map[edge(*vi, v, g).first] = true;
@@ -307,8 +307,6 @@ bool triangulate(vertex_t v, vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_ma
 				return true;
 		}
 		else if (shared.second != graph_traits<graph_t>::null_vertex() && vc_map[shared.second] && ec_map[edge(*vi, shared.second, g).first]){
-				//cout << "Triangulating " << v << " with " << edge(*vi, shared.first, g).first << endl;
-				cout << "Triangulating " << get(vertex_name, g, v) << " with (" << get(vertex_name, g, *vi) << "," << get(vertex_name, g, shared.second) << ")\n";
 				vc_map[v] = true;
 				ec_map[edge(*vi, shared.second, g).first] = false;
 				ec_map[edge(*vi, v, g).first] = true;
@@ -435,7 +433,6 @@ vector<edge_t> bolt_or_hourglass_from_triangle(edge_t e1, edge_t e2, edge_cycle_
 
 template<typename edge_t, typename vertex_cycle_map_t, typename edge_cycle_map_t, typename graph_t>
 vector<edge_t > bolt_or_hourglass(edge_t e, vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t &g){
-	cout << "Checking " << e << endl;
 	// For now, this only works for edges not in the cycle.
 	if (ec_map[e])
 		return vector<edge_t>();
@@ -514,7 +511,6 @@ vector<edge_t > bolt_or_hourglass(edge_t e, vertex_cycle_map_t &vc_map, edge_cyc
 			return b_or_h;
 		}
 	}
-	cout << "Test\n";
 	return b_or_h;
 	
 }
@@ -570,26 +566,21 @@ vector<edge_t > double_bolt_or_hourglass(edge_t e, vertex_cycle_map_t &vc_map, e
 		v = shared.second;
 	else
 		return b_or_h;
-	
-	cout << "Getting b_or_h1\n";
-	cout << "(v, v1) = (" << get(vertex_name, g, v) << "," << get(vertex_name, g, v1) << ")\n";
+		
 	b_or_h1 = bolt_or_hourglass(edge(v, v1, g).first, vc_map, ec_map, g);
 	if (!b_or_h1.empty()){
 		flip(b_or_h1, ec_map, g);
-		cout << "Getting b_or_h2\n";
 		b_or_h2 = bolt_or_hourglass(e, vc_map, ec_map, g);
 		if (!b_or_h2.empty()){
 			flip(b_or_h1, ec_map, g);
 			b_or_h.reserve(b_or_h1.size()+b_or_h2.size());
 			b_or_h.insert( b_or_h.end(), b_or_h1.begin(), b_or_h1.end() );
 			b_or_h.insert( b_or_h.end(), b_or_h2.begin(), b_or_h2.end() );
-			cout << "Found!\n";
 			return b_or_h;
 		}
 		flip(b_or_h1, ec_map, g);
 		b_or_h1.clear();
 	}
-	cout << "(v, v2) = (" << get(vertex_name, g, v) << "," << get(vertex_name, g, v2) << ")\n";
 	b_or_h1 = bolt_or_hourglass(edge(v, v2, g).first, vc_map, ec_map, g);
 	if (!b_or_h1.empty()){
 		flip(b_or_h1, ec_map, g);
@@ -621,6 +612,12 @@ vector<edge_t > double_bolt_or_hourglass2(edge_t e, vertex_cycle_map_t &vc_map, 
 		
 	typedef typename graph_traits<graph_t>::vertex_descriptor vertex_t;
 	vector<edge_t> b_or_h1, b_or_h2, b_or_h;
+	
+	// Check to make sure there isn't a single bolt or hourglass nearby.
+	b_or_h = bolt_or_hourglass(e, vc_map, ec_map, g);
+	if (!b_or_h.empty())
+		return b_or_h;
+	
 	vertex_t v1, v2, v;
 	v1 = source(e, g);
 	v2 = target(e, g);
@@ -655,11 +652,87 @@ vector<edge_t > double_bolt_or_hourglass2(edge_t e, vertex_cycle_map_t &vc_map, 
 			b_or_h.reserve(b_or_h1.size()+b_or_h2.size());
 			b_or_h.insert( b_or_h.end(), b_or_h1.begin(), b_or_h1.end() );
 			b_or_h.insert( b_or_h.end(), b_or_h2.begin(), b_or_h2.end() );
-			cout << "Found!\n";
 			return b_or_h;
 		}
 	}
 	return b_or_h;
+}
+
+
+// Note that this function assumes the following configuration around e:
+//    e
+// o-----o
+// \\   //
+//  \\ // 
+//    o    
+template<typename edge_t, typename vertex_cycle_map_t, typename edge_cycle_map_t, typename graph_t>
+bool find_linear_alt_kiss_cycle(edge_t e, vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t &g){
+	// For now, this only works for edges not in the cycle.
+	if (ec_map[e])
+		return false;
+		
+	typedef typename graph_traits<graph_t>::vertex_descriptor vertex_t;
+	vector<edge_t> double_b_or_h;
+	vertex_t v1, v2, v;
+	v1 = source(e, g);
+	v2 = target(e, g);
+	if (!vc_map[v1] || !vc_map[v2])
+		return false;
+	
+	edge_t e1, e2;
+	pair<vertex_t, vertex_t> shared = shared_neighbors(e, g);
+	if (ec_map[edge(shared.first, v1, g).first] && ec_map[edge(shared.first, v2, g).first]){
+		v = shared.first;
+		e1 = edge(shared.first, v1, g).first;
+		e2 = edge(shared.first, v2, g).first;
+	}
+	else if (ec_map[edge(shared.second, v1, g).first] && ec_map[edge(shared.second, v2, g).first]){
+		v = shared.second;
+		e1 = edge(shared.second, v1, g).first;
+		e2 = edge(shared.second, v2, g).first;
+	}
+	else
+		return false;
+		
+	vector<vertex_t> vc_vector;
+	vector<edge_t> ec_vector;
+	cycle_as_vector(vc_vector, ec_vector, vc_map, ec_map, g, v);
+	
+	optional<pair<edge_t, edge_t> > es;
+	optional<edge_t> opt_edge;
+	int i = -2;
+	
+	do{
+		i = i+2;
+		es = cycle_out_edges(vc_vector[i], vc_map, ec_map, g);
+		assert(es.is_initialized());
+		
+		opt_edge = triangle(es.get().first, es.get().second, g);
+		assert(opt_edge.is_initialized());
+		e = opt_edge.get();
+		
+		double_b_or_h = double_bolt_or_hourglass2(e, vc_map, ec_map, g);
+	}	while(i < vc_vector.size() && double_b_or_h.empty());
+	if (double_b_or_h.empty())
+		return false;
+	v = vc_vector[i];
+	
+	do {
+		es = cycle_out_edges(v, vc_map, ec_map, g);
+		assert(es.is_initialized());
+	
+		opt_edge = triangle(es.get().first, es.get().second, g);
+		assert(opt_edge.is_initialized());
+		e = opt_edge.get();
+		
+		double_b_or_h = double_bolt_or_hourglass2(e, vc_map, ec_map, g);
+		
+		flip(double_b_or_h, ec_map, g);
+		shared = shared_neighbors(e, g);
+		v = (shared.first == v ? shared.second : shared.first);
+	} while (vc_map[v]);
+	bool test = triangulate(v, vc_map, ec_map, g);
+	return test;
 }
 
 template<typename edge_t, typename edge_cycle_map_t, typename graph_t>
@@ -728,7 +801,6 @@ template<typename vertex_t, typename edge_t, typename vertex_cycle_map_t, typena
 void cycle_as_vector(vector<vertex_t>& vc_vector, vector<edge_t>& ec_vector, vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t &g, vertex_t v_first = typename graph_traits<graph_t>::null_vertex()){
 	vc_vector.clear();
 	ec_vector.clear();
-	cout << "v_first = " << get(vertex_name, g, v_first) << endl;
 	
 	if (v_first == graph_traits<graph_t>::null_vertex()){
 		typename graph_traits<graph_t>::vertex_iterator vi, vi_end;
@@ -748,27 +820,24 @@ void cycle_as_vector(vector<vertex_t>& vc_vector, vector<edge_t>& ec_vector, ver
 	
 	vc_vector.push_back(v_first); 
 	
-	cout << "vc_map[" << get(vertex_name, g, v_first) << "] = " << vc_map[v_first] << endl;
-	
 	optional<pair<edge_t, edge_t> > es = cycle_out_edges(v_first, vc_map, ec_map, g); 
 	assert(es.is_initialized());
 	e = es.get().first;
 	
 	ec_vector.push_back(e);
-	//vertex_t v_prev;
 	vertex_t v = (source(e, g) == v_first ? target(e, g) : source(e, g));
-	cout << "v = " << v << endl;
 	
 	while (v != v_first){
+				
 		vc_vector.push_back(v); 
 		es = cycle_out_edges(v, vc_map, ec_map, g);
 		assert(es.is_initialized()); 
+
 		e = (e == es.get().first ? es.get().second : es.get().first);
 		v = (source(e, g) == v ? target(e, g) : source(e, g));
 		ec_vector.push_back(e);
 	}
 }
-
 
 template<typename vertex_cycle_map_t, typename edge_cycle_map_t, typename graph_t>
 void extend_cycle(vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t &g){
@@ -783,31 +852,26 @@ void extend_cycle(vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t 
 	bool test;
 	while (!extendors.empty()){
 		vi = extendors.begin();
-		while(vi != extendors.end()){ 
-			cout << "Triangulating...\n";   
+		// This while loop iterates through the extendors and extends to all the vertices that
+		// can be "simply triangulated." That is, they could not
+		// 		1) be triangulated immediately
+		//		2) be triangulated with one bolt/hourglass flip
+		// Extendors requiring more flips are skipped for later.
+		while(vi != extendors.end()){
+			// Extendors may have duplicates, so this check is necessary.  
+			if (vc_map[*vi]){
+				vi = extendors.erase(vi);
+				continue;
+			}
 			test = triangulate(*vi, vc_map, ec_map, g);
 			if (!test){
-				cout << "Could not triangulate.\n";
 				e_neighbors = edge_neighbors(*vi, g);
-				cout << "Got e_naighbors.\n";
 				for (typename vector<edge_t>::iterator ei = e_neighbors.begin(); ei != e_neighbors.end(); ++ei){
-					cout << "Getting b_or_h\n";
 					b_or_h = bolt_or_hourglass(*ei, vc_map, ec_map, g);
-					cout << "Got b_or_h\n";
 					if (!b_or_h.empty()){
 						flip(b_or_h, ec_map, g);
 						b_or_h.clear();
 						test = triangulate(*vi, vc_map, ec_map, g);
-				
-						/*for (tie(vj, vj_end) = adjacent_vertices(*vi, g); vj != vj_end; ++vj){
-							if (!vc_map[*vj]){
-								shared = shared_neighbors(edge(*vi, *vj, g).first, g);
-								if (vc_map[shared.first] || vc_map[shared.second])
-									extendors.push_back(*vj);
-		
-							}
-						}
-						vi = extendors.erase(vi);*/
 						break;
 					}
 				}
@@ -816,21 +880,29 @@ void extend_cycle(vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t 
 					continue;
 				}
 			}
+			// Adds neighbors of vi to extendors as necessary. May add extendors that are already in there.
+			// TODO: Move this boiler plate to seperate function
 			for (tie(vj, vj_end) = adjacent_vertices(*vi, g); vj != vj_end; ++vj){
 				if (!vc_map[*vj]){
 					shared = shared_neighbors(edge(*vi, *vj, g).first, g);
-					if (vc_map[shared.first] || vc_map[shared.second])
+					if (vc_map[shared.first] || vc_map[shared.second]){
 						extendors.push_back(*vj);
+					}
 				
 				}
 			}
 			vi = extendors.erase(vi);
-			//++vi;
 		}
 		test = false;
-		//if (!extendors.empty()){
 		vi = extendors.begin();
+		// This while loop iterates through all the extendors that could not be simply triangulated,
+		// and looks for either a "double" bolt/hourglass, or a linear alternating kissing cycle.
 		while(vi != extendors.end()){ 
+			// Extendors may have duplicates, so this check is necessary.  
+			if (vc_map[*vi]){
+				vi = extendors.erase(vi);
+				continue;
+			}
 			e_neighbors = edge_neighbors(*vi, g);
 			for (typename vector<edge_t>::iterator ei = e_neighbors.begin(); ei != e_neighbors.end(); ++ei){
 				b_or_h = double_bolt_or_hourglass(*ei, vc_map, ec_map, g);
@@ -838,16 +910,21 @@ void extend_cycle(vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t 
 					flip(b_or_h, ec_map, g);
 					b_or_h.clear();
 					test = triangulate(*vi, vc_map, ec_map, g);
-					cout << "??\n";
+					break;
+				}
+				test = find_linear_alt_kiss_cycle(*ei, vc_map, ec_map, g);
+				if (test){
 					break;
 				}
 			}
 			if (test){
+				// Adds neighbors of vi to extendors as necessary. May add extendors that are already in there.
 				for (tie(vj, vj_end) = adjacent_vertices(*vi, g); vj != vj_end; ++vj){
 					if (!vc_map[*vj]){
 						shared = shared_neighbors(edge(*vi, *vj, g).first, g);
-						if (vc_map[shared.first] || vc_map[shared.second])
+						if (vc_map[shared.first] || vc_map[shared.second]){
 							extendors.push_back(*vj);
+						}
 			
 					}
 				}
@@ -857,9 +934,6 @@ void extend_cycle(vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t 
 			else
 				++vi;
 		}
-				
-		//}
-	
 	}
 }
 

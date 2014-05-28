@@ -33,18 +33,18 @@ typedef graph_traits<Graph>::out_edge_iterator out_edge_iter_t;
 
 vertex_t null_vertex = graph_traits<Graph>::null_vertex();
 
-/*template<typename graph_t, typename edge_cycle_map_t>
+template<typename graph_t, typename edge_cycle_map_t>
 void print(string filename, graph_t &G, edge_cycle_map_t &ec_map){
 			//std::map<std::string,std::string> graph_attr, vertex_attr, edge_attr;
 			//vertex_attr["shape"] = "point";
 			std::map<std::string,std::string> graph_attr, vertex_attr, edge_attr;
 			vertex_attr["shape"] = "point";
 			std::ofstream outfile(filename.c_str());
-			write_graphviz(outfile, G, make_label_writer(get(vertex_name, g)), 
+			write_graphviz(outfile, G, make_label_writer(get(vertex_name, G)), 
 																 make_bool_writer(ec_map),
 																 make_graph_attributes_writer(graph_attr, vertex_attr,
                                                      edge_attr));
-		}*/
+		}
 
 template<typename graph_t, typename edge_cycle_map_t, typename vertex_name_map_t>
 void print(string filename, graph_t &G, edge_cycle_map_t &ec_map, vertex_name_map_t& name){
