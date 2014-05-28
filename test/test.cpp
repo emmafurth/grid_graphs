@@ -292,6 +292,7 @@ void test_extend(string filename){
 	property_map<Graph, edge_in_two_factor_t>::type ec_map = get(edge_in_two_factor, g);
 	
 	print("twofactor.dot", g, ec_map);
+	// Should comment out these next two lines if dot isn't installed
 	char cmd1[] = "dot -Kneato -Tpng -o twofactor.png twofactor.dot";
 	exec(cmd1);
 	
@@ -299,6 +300,7 @@ void test_extend(string filename){
 	extend_cycle(vc_map, ec_map, g);
 	
 	print("extended.dot", g, ec_map);
+	// Should comment out these next two lines if dot isn't installed
 	char cmd2[] = "dot -Kneato -Tpng -o extended.png extended.dot";
 	exec(cmd2);
 }

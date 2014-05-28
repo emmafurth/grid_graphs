@@ -75,12 +75,14 @@ make_bool_writer(bool_map_t t) {
 	return bool_writer<bool_map_t>(t);
 }
 
+// Returns true if e1 and e2 contain the same vertex
 template<typename edge_t, typename graph_t>
 bool share_vertex(edge_t e1, edge_t e2, graph_t &g){
 	//typename graph_traits<graph_t>::vertex_descriptor v = graph_traits<graph_t>::null_vertex();	
 	return (source(e1, g) == source(e2, g) || source(e1, g) == target(e2, g) || target(e1, g) == source(e2, g) || target(e1, g) == target(e2, g));
 }
 
+// Returns the vertex shared by e1 and e2. Returns graph_traits<graph_t>::null_vertex(); if they do not share a vertex.
 template<typename edge_t, typename graph_t>
 typename graph_traits<graph_t>::vertex_descriptor shared_vertex(edge_t e1, edge_t e2, graph_t &g){
 	//typename graph_traits<graph_t>::vertex_descriptor v = graph_traits<graph_t>::null_vertex();	
@@ -92,6 +94,8 @@ typename graph_traits<graph_t>::vertex_descriptor shared_vertex(edge_t e1, edge_
 	return graph_traits<graph_t>::null_vertex();	
 }
 
+// If e1 and e2 are part of a triangle (i.e.: a cycle of length 3), returns the third edge in that triangle.
+// That is, if e1 = (u, v) and e2 = (v, w), and (u, w) is an edge in g, then this returns (u,w).
 template<typename edge_t, typename graph_t>
 optional<edge_t> triangle(edge_t e1, edge_t e2, graph_t &g){
 	typename graph_traits<graph_t>::vertex_descriptor v = shared_vertex(e1, e2, g);
@@ -110,8 +114,12 @@ optional<edge_t> triangle(edge_t e1, edge_t e2, graph_t &g){
 	return optional<edge_t>();
 }
 
+// Let e = (u,v). This returns the vertices that are in the intersection of N(u) and N(v). note that in 
+// triangular grid graphs there are at most two of these. If there is only one of these, then the second element
+// the pair will be graph_traits<graph_t>::null_vertex();	If there are none, the first will also be graph_traits<graph_t>::null_vertex();	
 template<typename Edge, typename graph_t>
-pair<typename graph_traits<graph_t>::vertex_descriptor, typename graph_traits<graph_t>::vertex_descriptor  > shared_neighbors(Edge e, graph_t &G) {
+pair<typename graph_traits<graph_t>::vertex_descriptor, typename graph_traits<graph_t>::vertex_descriptor  > 
+shared_neighbors(Edge e, graph_t &G) {
 	typedef typename graph_traits<graph_t>::adjacency_iterator adj_iter_t;
 	typedef typename graph_traits<graph_t>::vertex_descriptor vertex_t;
 	vertex_t v1 = source(e, G);
@@ -132,7 +140,7 @@ pair<typename graph_traits<graph_t>::vertex_descriptor, typename graph_traits<gr
 				else if (*vi != result.first){
 					result.second = *vi;
 					// Since there are at most two intermediate vertices, you can return
-					// as you as you find the second.
+					// as soon you as you find the second.
 					return result;
 				}
 			}
@@ -140,7 +148,7 @@ pair<typename graph_traits<graph_t>::vertex_descriptor, typename graph_traits<gr
 	}
 	return result;
 }
-
+// Returns all edges (u, w) such that u and w are adjacent to v.
 template<typename vertex_t, typename graph_t>
 vector<typename graph_traits<graph_t>::edge_descriptor > edge_neighbors(vertex_t v, graph_t &g){
 	typedef typename graph_traits<graph_t>::edge_descriptor edge_t;
@@ -163,6 +171,7 @@ vector<typename graph_traits<graph_t>::edge_descriptor > edge_neighbors(vertex_t
 	return e_neighbors;
 }
 
+// Returns true if the subgraph induced by the neighbors of v is a locally connected graph.
 template<typename vertex_t, typename graph_t> 
 bool locally_connected(vertex_t v, graph_t &G){
 	int n = num_vertices(G);
@@ -185,6 +194,7 @@ bool locally_connected(vertex_t v, graph_t &G){
 	return (i <= 2);
 }
 
+// Returns true if g is polygonal. Does so by checking that all vertices are locally connected.
 template<typename graph_t> 
 bool polygonal(graph_t &g){
 	typedef typename graph_traits<graph_t>::vertex_iterator vertex_iter_t;
@@ -196,6 +206,7 @@ bool polygonal(graph_t &g){
 	return true;
 }
 
+// Sets a property map indicating whether a given edge is a boundary edge or not.
 template<typename boundary_map_t, typename graph_t>
 void boundary_graph(boundary_map_t &b_map, graph_t &g){
 	typedef typename graph_traits<graph_t>::vertex_descriptor vertex_t;
@@ -209,6 +220,7 @@ void boundary_graph(boundary_map_t &b_map, graph_t &g){
 	}			
 }
 
+// Returns true if the graph is the Star of David graph.
 template<typename graph_t> 
 bool star_of_david(graph_t &g){
 	if (num_vertices(g) != 13)
@@ -256,6 +268,8 @@ bool star_of_david(graph_t &g){
 	return true;
 }
 
+// Returns a list of all vertices u such that 1) u is not in the cycle C, and 2) there 
+// exist vertices v and w in C such that u, v, and w form a triangle. 
 template<typename vertex_cycle_map_t, typename graph_t>
 list<typename graph_traits<graph_t>::vertex_descriptor > cycle_extendors(vertex_cycle_map_t &vc_map, graph_t &g){
 	typedef typename graph_traits<graph_t>::vertex_descriptor vertex_t;
@@ -287,7 +301,9 @@ list<typename graph_traits<graph_t>::vertex_descriptor > cycle_extendors(vertex_
 	return extendors;
 }
 
-
+// Takes v, and checks to see if there are any edges (u,w) in C such that u and w are both
+// adjacent to v. If so, this removes (u,w) from C, adds (u,v) and (v, w), and returns true.
+// Otherwise returns false.
 template<typename vertex_t, typename vertex_cycle_map_t, typename edge_cycle_map_t, typename graph_t>
 bool triangulate(vertex_t v, vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t &g){
 	if (vc_map[v])
@@ -317,6 +333,9 @@ bool triangulate(vertex_t v, vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_ma
 	return false;
 }
 
+// Returns 60, 120, or 180 if (v_minus, v) and (v_plus, v) form a 60, 120, or 180 degree
+// angle respectively. If none of the above are true (e.g.: if (v_minus, v) and/or 
+// (v, v_plus) are not edges), returns -1. 
 template<typename vertex_t, typename graph_t>
 int angle(vertex_t &v_minus, vertex_t &v, vertex_t &v_plus, graph_t &g){
 	typename graph_traits<graph_t>::edge_descriptor e1, e2;
@@ -345,6 +364,8 @@ int angle(vertex_t &v_minus, vertex_t &v, vertex_t &v_plus, graph_t &g){
 		return 180; 
 }
 
+// If v is in C, then this finds its incident edges in C and returns the degree of the
+// angle they form (60, 120, or 180). Otherwise returns -1. 
 template<typename vertex_t, typename edge_cycle_map_t, typename graph_t>
 int angle(vertex_t &v, edge_cycle_map_t &ec_map, graph_t &g){
 	vertex_t v_minus, v_plus;
@@ -366,6 +387,7 @@ int angle(vertex_t &v, edge_cycle_map_t &ec_map, graph_t &g){
 }
 
 // TODO: add better check for when cycle does not represent cycle. Also, ordering?
+// If v is in C, then finds and returns the edges incident to v in C.
 template<typename vertex_t, typename vertex_cycle_map_t, typename edge_cycle_map_t, typename graph_t>
 optional<pair<typename graph_traits<graph_t>::edge_descriptor, typename graph_traits<graph_t>::edge_descriptor > > 
 cycle_out_edges(vertex_t v, vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t &g){
@@ -390,6 +412,13 @@ cycle_out_edges(vertex_t v, vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map
 	return optional<pair<edge_t, edge_t> >();
 }
 
+// Assuming e1 and e2 form a triangle, like this: 
+//   o-----o
+//   \\   //
+// e1 \\ // e2
+//      o    
+// Checks to see if e1 and e2 are part of a bolt/hourglass; if so, returns vector of edges 
+// in the bolt/hourglass.
 template<typename edge_t, typename edge_cycle_map_t, typename graph_t>
 vector<edge_t> bolt_or_hourglass_from_triangle(edge_t e1, edge_t e2, edge_cycle_map_t &ec_map, graph_t &g){
 	vector<edge_t> b_or_h;
@@ -430,7 +459,8 @@ vector<edge_t> bolt_or_hourglass_from_triangle(edge_t e1, edge_t e2, edge_cycle_
 	return b_or_h;
 }
 
-
+// Checks to see if e is part of a bolt/hourglass; if so, returns vector of edges in the 
+// bolt/hourglass. For now, this only works if e is not in C.
 template<typename edge_t, typename vertex_cycle_map_t, typename edge_cycle_map_t, typename graph_t>
 vector<edge_t > bolt_or_hourglass(edge_t e, vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t &g){
 	// For now, this only works for edges not in the cycle.
@@ -521,6 +551,10 @@ vector<edge_t > bolt_or_hourglass(edge_t e, vertex_cycle_map_t &vc_map, edge_cyc
 //  \  //\   /\\  /
 //   \//  \ /  \\/
 //    o    o    o
+// Checks to see if e is part of an alternating kissing cycle containing at most two
+// bolts/hourglasses. If so, returns vector of edges in the alternating kissing cycle. 
+// (edges shared by the two bolts/hourglasses will be included twice; this will not affect
+// performance of flip). For now, this only works if e is not in C.
 template<typename edge_t, typename vertex_cycle_map_t, typename edge_cycle_map_t, typename graph_t>
 vector<edge_t > double_bolt_or_hourglass(edge_t e, vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t &g){
 	// For now, this only works for edges not in the cycle.
@@ -604,6 +638,12 @@ vector<edge_t > double_bolt_or_hourglass(edge_t e, vertex_cycle_map_t &vc_map, e
 // \\   //
 //  \\ // 
 //    o    
+// Checks to see if e is part of an alternating kissing cycle containing at most two
+// bolts/hourglasses. If so, returns vector of edges in the alternating kissing cycle. 
+// (edges shared by the two bolts/hourglasses will be included twice; this will not affect
+// performance of flip). For now, this only works if e is not in C.
+//
+// TODO: Come up with better function name.
 template<typename edge_t, typename vertex_cycle_map_t, typename edge_cycle_map_t, typename graph_t>
 vector<edge_t > double_bolt_or_hourglass2(edge_t e, vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t &g){
 	// For now, this only works for edges not in the cycle.
@@ -665,6 +705,10 @@ vector<edge_t > double_bolt_or_hourglass2(edge_t e, vertex_cycle_map_t &vc_map, 
 // \\   //
 //  \\ // 
 //    o    
+// Checks to see if e is part of an alternating kissing cycle containing an arbitrary
+// number of bolts/hourglasses (see thesis). If so, returns vector of edges in the 
+// alternating kissing cycle (edges shared by two bolts/hourglasses will be included twice;
+// this will not affect performance of flip). For now, this only works if e is not in C.
 template<typename edge_t, typename vertex_cycle_map_t, typename edge_cycle_map_t, typename graph_t>
 bool find_linear_alt_kiss_cycle(edge_t e, vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t &g){
 	// For now, this only works for edges not in the cycle.
@@ -735,6 +779,7 @@ bool find_linear_alt_kiss_cycle(edge_t e, vertex_cycle_map_t &vc_map, edge_cycle
 	return test;
 }
 
+// Returns true if the edges in alt_kiss_cycle are an alternating kissing cycle.
 template<typename edge_t, typename edge_cycle_map_t, typename graph_t>
 bool is_alt_kiss_cycle(vector<edge_t> &alt_kiss_cycle, edge_cycle_map_t &ec_map, graph_t &g){
 	typedef adjacency_list<vecS, vecS, undirectedS, 
@@ -791,12 +836,19 @@ bool is_alt_kiss_cycle(vector<edge_t> &alt_kiss_cycle, edge_cycle_map_t &ec_map,
 	return true;
 }
 
+// Flips alt_kiss_cycle. That is, if some edge e is in C and alt_kiss_cycle, then it will 
+// be removed from C. If e is not in C but is in alt_kiss_cycle, then it will be added to
+// C. If e is in alt_kiss_cycle an even number of times, then it will be unchanged.
+// If e is in alt_kiss_cycle an odd number of times, then it will be changed as if it were 
+// only included once. 
 template<typename edge_t, typename edge_cycle_map_t, typename graph_t>
 void flip(vector<edge_t> &alt_kiss_cycle, edge_cycle_map_t &ec_map, graph_t &g){
 	for(typename vector<edge_t>::iterator ei = alt_kiss_cycle.begin(); ei != alt_kiss_cycle.end(); ++ei)
 		ec_map[*ei] = !ec_map[*ei];
 }
 
+// Takes the property maps indicating whether a particular vertex/edge is in C, and 
+// populates vc_vector and ec_vector with the vertices/edges in C in order.
 template<typename vertex_t, typename edge_t, typename vertex_cycle_map_t, typename edge_cycle_map_t, typename graph_t>
 void cycle_as_vector(vector<vertex_t>& vc_vector, vector<edge_t>& ec_vector, vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t &g, vertex_t v_first = typename graph_traits<graph_t>::null_vertex()){
 	vc_vector.clear();
@@ -839,6 +891,8 @@ void cycle_as_vector(vector<vertex_t>& vc_vector, vector<edge_t>& ec_vector, ver
 	}
 }
 
+// If a cycle is non-Hamiltonian, extends it to a Hamiltonian cycle
+// (only works if g is polygonal and not the Star of David)
 template<typename vertex_cycle_map_t, typename edge_cycle_map_t, typename graph_t>
 void extend_cycle(vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t &g){
 	typedef typename graph_traits<graph_t>::vertex_descriptor vertex_t;
