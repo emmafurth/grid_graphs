@@ -24,6 +24,10 @@ typedef adjacency_list<vecS, vecS, undirectedS,
 												property<vertex_name_t, int, property<vertex_in_two_factor_t, bool> >, 
 												property<edge_in_two_factor_t, bool> 
 												> Graph;
+typedef adjacency_list<vecS, vecS, undirectedS, 
+												property<vertex_name_t, string, property<vertex_in_two_factor_t, bool> >, 
+												property<edge_in_two_factor_t, bool> 
+												> graph_t;												
 typedef graph_traits<Graph>::vertex_descriptor vertex_t;
 typedef graph_traits<Graph>::edge_descriptor edge_t;
 typedef graph_traits<Graph>::vertex_iterator vertex_iter_t;
@@ -305,12 +309,21 @@ void test_extend(string filename){
 	exec(cmd2);
 }
 
+void random_polygonal_graph(){
+	graph_t g = random_triangular_grid_graph<graph_t>(5, 5);
+	std::ofstream outfile("random.dot");
+	write_graphviz(outfile, g, make_label_writer(get(vertex_name, g)));
+	char cmd[] = "dot -Kneato -Tpng -o random.png random.dot";
+	exec(cmd);
+}
+
 int main(int argc,char* argv[]){
 	
 	srand(time(NULL));
-	string filename = argv[1];
-
-	test_extend(filename);
+	//string filename = argv[1];
+	
+	random_polygonal_graph();
+	//test_extend(filename);
 	/*int i = 0;
 	enum { A, B, C, D, E, F, G , N};
 	const char* name = "ABCDEFG";

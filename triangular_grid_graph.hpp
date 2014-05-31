@@ -11,6 +11,7 @@
 #include <boost/graph/property_maps/null_property_map.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/graph_utility.hpp>
+#include <boost/graph/connected_components.hpp>
 
 enum edge_boundary_t { edge_boundary };
 enum edge_in_two_factor_t { edge_in_two_factor };
@@ -24,6 +25,8 @@ namespace boost {
 
 using namespace std;
 using namespace boost;
+
+const double epsilon = 0.001;
 
 /*template <typename Vertex, class Graph>
 struct neighbor_of {
@@ -197,6 +200,11 @@ bool locally_connected(vertex_t v, graph_t &G){
 // Returns true if g is polygonal. Does so by checking that all vertices are locally connected.
 template<typename graph_t> 
 bool polygonal(graph_t &g){
+
+	std::vector<int> component(num_vertices(g));
+  int num = connected_components(g, &component[0]);
+  if (num > 1)
+  	return false;
 	typedef typename graph_traits<graph_t>::vertex_iterator vertex_iter_t;
 	vertex_iter_t vi, vi_end;
 	for(tie(vi, vi_end) = vertices(g); vi != vi_end; ++vi){
@@ -991,4 +999,93 @@ void extend_cycle(vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t 
 	}
 }
 
+
+// (x1,y1) = x*(1,0) + y*(0.5, sqrt(3)/2)
+pair<double, double> convert_coord(int x, int y){
+	double x1 = x+ y/2;
+	double y1 = y*sqrt(3)/2;
+	return make_pair(x1, y1);
+}
+
+pair<double, double> convert_coord(pair<int, int> coord){
+	return convert_coord(coord.first, coord.second);
+}
+
+double coord_distance(double x1, double y1, double x2, double y2){
+	double result = sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1));
+	// If the distance is less then epsilon away from an integer, then round it. 
+	if (abs(floor(result+0.5)-result) < epsilon)
+		return floor(result+0.5);
+	else 
+		return result;
+}
+double coord_distance(pair<double, double> coord1, pair<double, double> coord2){
+	return coord_distance(coord1.first, coord1.second, coord2.first, coord2.second);
+}
+
+double coord_distance(pair<int, int> coord1, pair<int, int> coord2){
+	pair<double, double> converted_coord1 = convert_coord(coord1);
+	pair<double, double> converted_coord2 = convert_coord(coord2);
+	return coord_distance(converted_coord1, converted_coord2);
+}
+
+vector<pair<int, int> > get_random_coords(int x, int y){
+	int num_vertices = rand()%(x*y/3)+(x*y/3);
+	cout << "Num vertices: " << num_vertices << endl;
+	vector<pair<int, int> > coords;
+	
+	int already_picked[x*y];
+	int a, b, c;
+	for(int i=0; i < num_vertices; i++){
+		do{
+			a = rand()%(x*y);
+		}while(already_picked[a] == 1);
+		b = a % x;
+		c = a / x;
+		cout << "Picked (" << b << "," << c << ")\n";
+		already_picked[a] = 1;
+		coords.push_back(make_pair(b, c));
+	}
+	return coords;
+}
+
+template<typename graph_t>
+graph_t get_triangular_grid_graph_from_coords(vector<pair<int, int> > coords){
+	graph_t g;
+	typedef typename graph_traits<graph_t>::vertex_descriptor vertex_t;
+	map<vertex_t, pair<int, int> > vertex_to_coord;
+	vertex_t v;
+	string name;
+	for (int i=0; i< coords.size(); i++){
+	//for (vector<pair<int, int> >::iterator coord = coords.begin() ; coord != coords.end(); ++coord){
+		name = "(" + to_string(coords[i].first) + "," + to_string(coords[i].second) + ")";
+		v = add_vertex(g);
+		put(vertex_name, g, v, name);
+		vertex_to_coord[v] = coords[i];
+	}
+	typename graph_traits<graph_t>::vertex_iterator vi, vj, vi_end, vj_end;
+	for(tie(vi, vi_end) = vertices(g); vi != vi_end; ++vi){
+		for(tie(vj, vj_end) = vertices(g); vj != vj_end; ++vj){
+			//cout << "Distance between (" << vertex_to_coord[*vi].first << "," << vertex_to_coord[*vi].second << ") and (" << vertex_to_coord[*vj].first << "," << vertex_to_coord[*vj].second << ") is " << coord_distance(vertex_to_coord[*vi], vertex_to_coord[*vj]) << endl;
+			if (coord_distance(vertex_to_coord[*vi], vertex_to_coord[*vj]) == 1.0 && !edge(*vi, *vj, g).second)
+				add_edge(*vi, *vj, g);
+		}
+	}
+	return g;
+}
+
+template<typename graph_t>
+graph_t random_triangular_grid_graph(int x, int y){
+	vector<pair<int, int> > coords;
+	graph_t g;
+	int i = 0;
+	do {
+		cout << "Attempt " << i << endl;
+		coords = get_random_coords(x, y);
+		cout << "Got coords\n";
+		g = get_triangular_grid_graph_from_coords<graph_t>(coords);
+		i++;
+	}while(!polygonal(g));
+	return g;
+}
 #endif
