@@ -1,0 +1,8 @@
+graph G {
+0;
+1;
+2;
+1--0  [style=dotted];
+2--0  [style=bold];
+2--1  [style=bold];
+}

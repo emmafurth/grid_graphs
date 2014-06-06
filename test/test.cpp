@@ -3,6 +3,7 @@
 #include <stdlib.h>     /* srand, rand */
 #include <time.h>       /* time */
 #include <iostream>
+#include <fstream>
 #include <iterator>
 #include <algorithm>
 #include <time.h>
@@ -10,6 +11,12 @@
 
 #include <boost/utility.hpp>
 #include <boost/graph/graphviz.hpp>
+#include <boost/graph/random_spanning_tree.hpp>
+#include <boost/random/random_device.hpp>
+#include <boost/random/mersenne_twister.hpp>
+#include <boost/property_map/shared_array_property_map.hpp>
+#include <boost/graph/property_maps/constant_property_map.hpp>
+#include <boost/lexical_cast.hpp>
 /*#include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/copy.hpp>
 #include <boost/graph/graph_utility.hpp>
@@ -36,13 +43,14 @@ typedef graph_traits<Graph>::adjacency_iterator adj_iter_t;
 typedef graph_traits<Graph>::out_edge_iterator out_edge_iter_t;
 
 vertex_t null_vertex = graph_traits<Graph>::null_vertex();
+boost::mt19937 random_generator;
 
 template<typename graph_t, typename edge_cycle_map_t>
 void print(string filename, graph_t &G, edge_cycle_map_t &ec_map){
 			//std::map<std::string,std::string> graph_attr, vertex_attr, edge_attr;
 			//vertex_attr["shape"] = "point";
 			std::map<std::string,std::string> graph_attr, vertex_attr, edge_attr;
-			vertex_attr["shape"] = "point";
+			//vertex_attr["shape"] = "point";
 			std::ofstream outfile(filename.c_str());
 			write_graphviz(outfile, G, make_label_writer(get(vertex_name, G)), 
 																 make_bool_writer(ec_map),
@@ -55,13 +63,50 @@ void print(string filename, graph_t &G, edge_cycle_map_t &ec_map, vertex_name_ma
 			//std::map<std::string,std::string> graph_attr, vertex_attr, edge_attr;
 			//vertex_attr["shape"] = "point";
 			std::map<std::string,std::string> graph_attr, vertex_attr, edge_attr;
-			vertex_attr["shape"] = "point";
+			//vertex_attr["shape"] = "point";
 			std::ofstream outfile(filename.c_str());
 			write_graphviz(outfile, G, make_label_writer(name), 
 																 make_bool_writer(ec_map),
 																 make_graph_attributes_writer(graph_attr, vertex_attr,
                                                      edge_attr));
 		}
+		
+template <typename Graph_T, typename PredMap>
+void write_spanning_tree(const Graph_T& g, PredMap pred, string filename) {
+  shared_array_property_map<string, typename property_map<Graph_T, edge_index_t>::const_type> edge_style(num_edges(g), get(edge_index, g));
+  cout << num_edges(g) << endl;
+  //shared_array_property_map<string, typename property_map<Graph_T, vertex_index_t>::const_type> vertex_pos(num_vertices(g), get(vertex_index, g));
+  
+  BGL_FORALL_EDGES_T(e, g, Graph_T) {
+  	cout << get(edge_style, e) << endl;
+  }
+  
+  cout << "--------\n";
+  
+  BGL_FORALL_EDGES_T(e, g, Graph_T) {
+  	cout << "Edge " << e << ": " << (get(pred, target(e, g)) == source(e, g) || get(pred, source(e, g)) == target(e, g)) << endl;
+    put(edge_style, e, (get(pred, target(e, g)) == source(e, g) || get(pred, source(e, g)) == target(e, g)) ? "bold" : "dotted");
+  	//edge_style[e] = (get(pred, target(e, g)) == source(e, g) || get(pred, source(e, g)) == target(e, g)) ? "bold" : "dotted";
+  	
+  	cout << get(edge_style, e) << endl;
+  }
+  
+  cout << "--------\n";
+  
+  BGL_FORALL_EDGES_T(e, g, Graph_T) {
+  	cout << e << ": " << edge_style[e] << endl;
+  }
+  /*BGL_FORALL_VERTICES_T(v, g, Graph_T) {
+    put(vertex_pos, v, lexical_cast<string>(v[0]) + "," + lexical_cast<string>(v[1]));
+  }*/
+  dynamic_properties dp;
+  dp.property("style", edge_style);
+  //dp.property("pos", vertex_pos);
+  //dp.property("len", weight);
+  dp.property("node_id", get(vertex_index, g));
+  ofstream out(filename.c_str());
+  write_graphviz_dp(out, g, dp);
+}
 
 // Taken from here: http://stackoverflow.com/questions/478898/how-to-execute-a-command-and-get-output-of-command-within-c
 std::string exec(char* cmd) {
@@ -92,6 +137,25 @@ void read_two_factor(string filename, graph_t &g){
 	
 	//copy_to_labeled_graph(G_prime, G);
 	//cout << "Test2\n";
+}
+
+vector<pair<int, int> > read_coord_file(string filename){
+	vector<pair<int, int> > coords;
+	
+	if (filename.length() <= 6)
+		return coords;
+	if (0 != filename.compare (filename.length() - 6, 6, ".coord"))
+		return coords;
+	ifstream infile(filename.c_str());
+	int x, y;
+	char dummy;
+	
+	while (infile >> x >> dummy >> y)
+	{
+			cout << x << "," << y <<endl;
+			coords.push_back(make_pair(x,y));
+	}
+	return coords;
 }
 
 /*void test_b_or_h(){
@@ -253,9 +317,6 @@ void test_extend(string filename){
 	dynamic_properties dp;
 	ifstream in(filename.c_str());
 	
-	property_map<Graph, vertex_in_two_factor_t>::type tmp1;
-	property_map<Graph, edge_in_two_factor_t>::type tmp2;
-	
 	dp.property("id", get(vertex_name, g)); 
 	//dp.property("v_in_cycle", tmp1);
 	dp.property("v_in_cycle", get(vertex_in_two_factor, g));
@@ -317,13 +378,118 @@ void random_polygonal_graph(){
 	exec(cmd);
 }
 
+void test_boundary_two_factor(string filename){
+	edge_iter_t ei, ei_end, ej, ej_end;
+	/*Graph g;
+	dynamic_properties dp;
+	ifstream in(filename.c_str());
+	
+	dp.property("id", get(vertex_name, g)); 
+	//dp.property("v_in_cycle", tmp1);
+	dp.property("v_in_cycle", get(vertex_in_two_factor, g));
+	//dp.property("e_in_cycle", tmp2);
+	dp.property("e_in_cycle", get(edge_in_two_factor, g));
+
+	read_graphviz(in, g, dp, "id");*/
+	
+	vector<pair<int, int> > coords = read_coord_file(filename);
+	graph_t g = get_triangular_grid_graph_from_coords<graph_t>(coords);
+	
+	vertex_iter_t vi, vi_end;
+	for(tie(vi, vi_end) = vertices(g); vi != vi_end; ++vi)
+		put(vertex_in_two_factor, g, *vi, false);
+	
+	for (tie(ei, ei_end) = edges(g); ei != ei_end; ++ei)
+		put(edge_in_two_factor, g, *ei, false);
+	
+	property_map<graph_t, vertex_in_two_factor_t>::type vc_map = get(vertex_in_two_factor, g);
+	property_map<graph_t, edge_in_two_factor_t>::type ec_map = get(edge_in_two_factor, g);
+	boundary_based_two_factor(vc_map, ec_map, g);
+	
+	print("twofactor.dot", g, ec_map);
+	char cmd[] = "dot -Kneato -Tpng -o twofactor.png twofactor.dot";
+	exec(cmd);
+	
+	vector<int> component;
+	int k = two_factor_components(ec_map, g, component);
+	
+	for(tie(vi, vi_end) = vertices(g); vi != vi_end; ++vi)
+		cout << "component[" << get(vertex_name, g, *vi) << "] = " << component[*vi] << endl;
+		
+	/*cout << "Parallelograms:\n";
+	optional<Triple<edge_t> > result;
+	for (tie(ei, ei_end) = edges(g); ei != ei_end; ++ei){
+		for (tie(ej, ej_end) = edges(g); ej != ei; ++ej){
+			if (ec_map[*ei] && ec_map[*ej] && is_parallelogram(*ei, *ej, g)){
+				result = parallelogram(*ei, *ej, g);
+				assert(result.is_initialized());
+				cout << edge_str(*ei, g) << " and " << edge_str(*ej, g) << " along with " << edge_str(result.get().first, g) << ", " << edge_str(result.get().second, g) << ", and " << edge_str(result.get().third, g) << endl;
+			}
+		}
+	}
+	*/
+	list<pair<edge_t, edge_t> > pars;
+	pars = get_boundary_parallelograms(vc_map, ec_map, g);
+	cout << "Boundary parallelograms:\n";
+	for(list<pair<edge_t, edge_t> >::iterator pi = pars.begin(); pi != pars.end(); ++pi)
+		cout << edge_str((*pi).first, g) << " and " << edge_str((*pi).second, g) << endl;
+	
+	typedef adjacency_list<vecS, vecS, undirectedS, property<vertex_index_t, int, 
+																									property<vertex_name_t, int> >,
+																									property<edge_index_t, size_t> 
+																									> c_graph_t;
+	c_graph_t cg = get_component_graph<c_graph_t>(vc_map, ec_map, g);
+	
+	/*enum { A, B, C, N};
+	const char* name = "ABC";
+	c_graph_t cg(N);
+	
+	add_edge(A, B, 0, cg);
+	add_edge(A, C, 1, cg);
+	add_edge(B, C, 2, cg);*/
+	
+	
+	std::ofstream outfile("component.dot");
+	write_graphviz(outfile, cg, make_label_writer(get(vertex_name, cg))); 
+	char cmd2[] = "dot -Kneato -Tpng -o component.png component.dot";
+	exec(cmd2);
+	
+	//shared_array_property_map<gt::vertex_descriptor, property_map<graph_type, vertex_index_t>::const_type> pred(num_vertices(g), get(vertex_index, g));
+	/*shared_array_property_map<graph_traits<c_graph_t>::vertex_descriptor, property_map<c_graph_t, vertex_index_t>::const_type> pred(num_vertices(cg), get(vertex_index, cg));
+	
+	random_spanning_tree(cg, random_generator, predecessor_map(pred));
+	write_spanning_tree(cg, pred, "unweight_random_st.dot");
+
+	graph_traits<c_graph_t>::vertex_iterator vj, vj_end;
+	for(tie(vj, vj_end) = vertices(cg); vj != vj_end; ++vj)
+		cout << "Predecessor of " << *vj << " is  " << pred[*vj] << endl;
+		*/
+		
+	cout << merge_all_components(vc_map, ec_map, g) << endl;
+	
+	print("extended.dot", g, ec_map);
+	char cmd3[] = "dot -Kneato -Tpng -o extended.png extended.dot";
+	exec(cmd3);
+	
+}
+
 int main(int argc,char* argv[]){
 	
 	srand(time(NULL));
-	//string filename = argv[1];
+	string filename = argv[1];
 	
-	random_polygonal_graph();
-	//test_extend(filename);
+	//random_polygonal_graph();
+	test_boundary_two_factor(filename);
+	
+	/*pair<int, int> coord1(2,0);
+	pair<int, int> coord2(1,1);
+	pair<float, float> float_coord1 = convert_coord(coord1);
+	pair<float, float> float_coord2 = convert_coord(coord2);
+	
+	cout << "Convert: (" << float_coord1.first << "," << float_coord1.second << ") and ("  << float_coord2.first << "," << float_coord2.second << ")\n";
+	cout << "Distance: " << coord_distance(coord1, coord2) << endl;*/
+	
+	//read_coord_file(filename);
 	/*int i = 0;
 	enum { A, B, C, D, E, F, G , N};
 	const char* name = "ABCDEFG";

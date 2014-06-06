@@ -9,9 +9,12 @@
 #include <boost/utility.hpp>
 #include <boost/graph/graphviz.hpp>
 #include <boost/graph/property_maps/null_property_map.hpp>
+#include <boost/property_map/shared_array_property_map.hpp>
+#include <boost/graph/property_maps/constant_property_map.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/graph_utility.hpp>
 #include <boost/graph/connected_components.hpp>
+#include <boost/graph/filtered_graph.hpp>
 
 enum edge_boundary_t { edge_boundary };
 enum edge_in_two_factor_t { edge_in_two_factor };
@@ -27,6 +30,15 @@ using namespace std;
 using namespace boost;
 
 const double epsilon = 0.001;
+
+/*template<typename edge_t>
+struct Triple{
+	edge_t first;
+	edge_t second;
+	edge_t third;
+	Triple() {}
+	Triple(edge_t e1, edge_t e2, edge_t e3) : first(e1), second(e2), third(e3) {}
+};*/
 
 /*template <typename Vertex, class Graph>
 struct neighbor_of {
@@ -77,6 +89,25 @@ inline bool_writer<bool_map_t>
 make_bool_writer(bool_map_t t) {
 	return bool_writer<bool_map_t>(t);
 }
+template<typename edge_t, typename graph_t>
+string edge_str(edge_t e, graph_t &g){
+	stringstream s;
+	s << "(" << get(vertex_name, g, source(e, g)) << "," << get(vertex_name, g, target(e, g)) << ")";
+	return s.str();
+}
+
+template <typename two_factor_map_t>
+struct two_factor_filter {
+  two_factor_filter() { }
+  two_factor_filter(two_factor_map_t tfmap) : m_tf(tfmap) { }
+  template <typename Edge>
+  bool operator()(const Edge& e) const {
+  	//if( m_tf[e] >1)
+  	//	cout << "m_tf[" << e << "] = " << m_tf[e] << endl;
+    return m_tf[e];
+  }
+  two_factor_map_t m_tf;
+};
 
 // Returns true if e1 and e2 contain the same vertex
 template<typename edge_t, typename graph_t>
@@ -117,6 +148,89 @@ optional<edge_t> triangle(edge_t e1, edge_t e2, graph_t &g){
 	return optional<edge_t>();
 }
 
+template<typename edge_t, typename graph_t>
+bool is_parallelogram(edge_t e1, edge_t e2, graph_t &g){
+	typedef typename graph_traits<graph_t>::vertex_descriptor vertex_t;
+	/*pair<vertex_t, vertex_t> shared1, shared2;
+	shared1 = shared_neighbors(e1, g);
+	shared2 = shared_neighbors(e2, g);*/
+	
+	vertex_t v1 = source(e1, g);
+	vertex_t v2 = target(e1, g);
+	vertex_t v3 = source(e2, g);
+	vertex_t v4 = target(e2, g);
+
+	if (v1 == v3 || v1 == v4 || v2 == v3 || v2 == v4)
+		return false;
+	
+	return (edge(v1, v3, g).second && edge(v1, v4, g).second && (edge(v2, v3, g).second || edge(v2, v4, g).second)) ||
+								(edge(v2, v3, g).second && edge(v2, v4, g).second && (edge(v1, v3, g).second || edge(v1, v4, g).second));
+}
+/*template<typename edge_t, typename graph_t>
+optional<Triple<edge_t> > parallelogram(edge_t e1, edge_t e2, graph_t &g){
+	typedef typename graph_traits<graph_t>::vertex_descriptor vertex_t;
+	
+	vertex_t v1 = source(e1, g);
+	vertex_t v2 = target(e1, g);
+	vertex_t v3 = source(e2, g);
+	vertex_t v4 = target(e2, g);
+
+	if (v1 == v3 || v1 == v4 || v2 == v3 || v2 == v4)
+		return optional<Triple<edge_t> >();
+	Triple<edge_t> tmp;
+	if (edge(v1, v3, g).second && edge(v1, v4, g).second){
+		if (edge(v2, v3, g).second){
+			tmp = Triple<edge_t>(edge(v1, v3, g).first, edge(v1, v4, g).first, edge(v2, v3, g).first);
+			return optional<Triple<edge_t> >(tmp);
+		}
+		else if (edge(v2, v4, g).second)
+			return optional<Triple<edge_t> >(Triple<edge_t>(edge(v1, v3, g).first, edge(v1, v4, g).first, edge(v2, v4, g).first));
+		else
+			return optional<Triple<edge_t> >();
+	}
+	else if (edge(v2, v3, g).second && edge(v2, v4, g).second){
+		if (edge(v1, v3, g).second)
+			return optional<Triple<edge_t> >(Triple<edge_t>(edge(v2, v3, g).first, edge(v2, v4, g).first, edge(v1, v3, g).first));
+		else if (edge(v1, v4, g).second)
+			return optional<Triple<edge_t> >(Triple<edge_t>(edge(v2, v3, g).first, edge(v2, v4, g).first, edge(v1, v4, g).first));
+		else
+			return optional<Triple<edge_t> >();
+	}
+	else
+		return optional<Triple<edge_t> >();
+}
+*/
+
+template<typename edge_t, typename graph_t>
+vector<edge_t> parallelogram(edge_t e1, edge_t e2, graph_t &g){
+	typedef typename graph_traits<graph_t>::vertex_descriptor vertex_t;
+	
+	vector<edge_t> result;
+	
+	vertex_t v1 = source(e1, g);
+	vertex_t v2 = target(e1, g);
+	vertex_t v3 = source(e2, g);
+	vertex_t v4 = target(e2, g);
+
+	if (v1 == v3 || v1 == v4 || v2 == v3 || v2 == v4)
+		return result;
+	
+	
+	if (edge(v1, v3, g).second && edge(v2, v4, g).second){
+		result.push_back(e1);
+		result.push_back(e2);
+		result.push_back(edge(v1, v3, g).first);
+		result.push_back(edge(v2, v4, g).first);
+	}
+	else if (edge(v1, v4, g).second && edge(v2, v3, g).second){
+		result.push_back(e1);
+		result.push_back(e2);
+		result.push_back(edge(v1, v4, g).first);
+		result.push_back(edge(v2, v3, g).first);
+	}
+	
+	return result;
+}
 // Let e = (u,v). This returns the vertices that are in the intersection of N(u) and N(v). note that in 
 // triangular grid graphs there are at most two of these. If there is only one of these, then the second element
 // the pair will be graph_traits<graph_t>::null_vertex();	If there are none, the first will also be graph_traits<graph_t>::null_vertex();	
@@ -212,20 +326,6 @@ bool polygonal(graph_t &g){
 			return false;	
 	}
 	return true;
-}
-
-// Sets a property map indicating whether a given edge is a boundary edge or not.
-template<typename boundary_map_t, typename graph_t>
-void boundary_graph(boundary_map_t &b_map, graph_t &g){
-	typedef typename graph_traits<graph_t>::vertex_descriptor vertex_t;
-	vertex_t null_vertex = graph_traits<graph_t>::null_vertex();
-	typedef typename graph_traits<graph_t>::edge_iterator edge_iter_t;
-	edge_iter_t ei, ei_end; 
-	pair<vertex_t, vertex_t> shared;
-	for (tie(ei, ei_end) = edges(g); ei != ei_end; ++ei){
-		shared = shared_neighbors(*ei, g);
-		b_map[*ei] = (shared.first == null_vertex || shared.second == null_vertex);
-	}			
 }
 
 // Returns true if the graph is the Star of David graph.
@@ -1001,37 +1101,37 @@ void extend_cycle(vertex_cycle_map_t &vc_map, edge_cycle_map_t &ec_map, graph_t 
 
 
 // (x1,y1) = x*(1,0) + y*(0.5, sqrt(3)/2)
-pair<double, double> convert_coord(int x, int y){
-	double x1 = x+ y/2;
-	double y1 = y*sqrt(3)/2;
+pair<float, float> convert_coord(int x, int y){
+	float x1 = x+((float)y)/2.0;
+	float y1 = y*sqrt(3.0)/2.0;
 	return make_pair(x1, y1);
 }
 
-pair<double, double> convert_coord(pair<int, int> coord){
+pair<float, float> convert_coord(pair<int, int> coord){
 	return convert_coord(coord.first, coord.second);
 }
 
-double coord_distance(double x1, double y1, double x2, double y2){
-	double result = sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1));
+float coord_distance(float x1, float y1, float x2, float y2){
+	float result = sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1));
 	// If the distance is less then epsilon away from an integer, then round it. 
 	if (abs(floor(result+0.5)-result) < epsilon)
 		return floor(result+0.5);
 	else 
 		return result;
 }
-double coord_distance(pair<double, double> coord1, pair<double, double> coord2){
+float coord_distance(pair<float, float> coord1, pair<float, float> coord2){
 	return coord_distance(coord1.first, coord1.second, coord2.first, coord2.second);
 }
 
-double coord_distance(pair<int, int> coord1, pair<int, int> coord2){
-	pair<double, double> converted_coord1 = convert_coord(coord1);
-	pair<double, double> converted_coord2 = convert_coord(coord2);
+float coord_distance(pair<int, int> coord1, pair<int, int> coord2){
+	pair<float, float> converted_coord1 = convert_coord(coord1);
+	pair<float, float> converted_coord2 = convert_coord(coord2);
 	return coord_distance(converted_coord1, converted_coord2);
 }
 
 vector<pair<int, int> > get_random_coords(int x, int y){
 	int num_vertices = rand()%(x*y/3)+(x*y/3);
-	cout << "Num vertices: " << num_vertices << endl;
+	//cout << "Num vertices: " << num_vertices << endl;
 	vector<pair<int, int> > coords;
 	
 	int already_picked[x*y];
@@ -1042,7 +1142,7 @@ vector<pair<int, int> > get_random_coords(int x, int y){
 		}while(already_picked[a] == 1);
 		b = a % x;
 		c = a / x;
-		cout << "Picked (" << b << "," << c << ")\n";
+		//cout << "Picked (" << b << "," << c << ")\n";
 		already_picked[a] = 1;
 		coords.push_back(make_pair(b, c));
 	}
@@ -1059,16 +1159,19 @@ graph_t get_triangular_grid_graph_from_coords(vector<pair<int, int> > coords){
 	for (int i=0; i< coords.size(); i++){
 	//for (vector<pair<int, int> >::iterator coord = coords.begin() ; coord != coords.end(); ++coord){
 		name = "(" + to_string(coords[i].first) + "," + to_string(coords[i].second) + ")";
-		v = add_vertex(g);
-		put(vertex_name, g, v, name);
+		v = add_vertex(name, g);
+		//cout << "Adding " << name << endl;
+		//put(vertex_name, g, v, name);
 		vertex_to_coord[v] = coords[i];
 	}
 	typename graph_traits<graph_t>::vertex_iterator vi, vj, vi_end, vj_end;
 	for(tie(vi, vi_end) = vertices(g); vi != vi_end; ++vi){
 		for(tie(vj, vj_end) = vertices(g); vj != vj_end; ++vj){
 			//cout << "Distance between (" << vertex_to_coord[*vi].first << "," << vertex_to_coord[*vi].second << ") and (" << vertex_to_coord[*vj].first << "," << vertex_to_coord[*vj].second << ") is " << coord_distance(vertex_to_coord[*vi], vertex_to_coord[*vj]) << endl;
-			if (coord_distance(vertex_to_coord[*vi], vertex_to_coord[*vj]) == 1.0 && !edge(*vi, *vj, g).second)
+			if (coord_distance(vertex_to_coord[*vi], vertex_to_coord[*vj]) == 1.0 && !edge(*vi, *vj, g).second){
+				//cout << "Adding (" << vertex_to_coord[*vi].first << "," << vertex_to_coord[*vi].second << ") and (" << vertex_to_coord[*vj].first << "," << vertex_to_coord[*vj].second << ")\n";
 				add_edge(*vi, *vj, g);
+			}
 		}
 	}
 	return g;
@@ -1087,5 +1190,258 @@ graph_t random_triangular_grid_graph(int x, int y){
 		i++;
 	}while(!polygonal(g));
 	return g;
+}
+
+// Sets a property map indicating whether a given edge is a boundary edge or not.
+template<typename boundary_vertex_map_t, typename boundary_edge_map_t, typename graph_t>
+void boundary_graph(boundary_vertex_map_t &vb_map, boundary_edge_map_t &eb_map, graph_t &g){
+	typedef typename graph_traits<graph_t>::vertex_descriptor vertex_t;
+	vertex_t null_vertex = graph_traits<graph_t>::null_vertex();
+	typedef typename graph_traits<graph_t>::edge_iterator edge_iter_t;
+	edge_iter_t ei, ei_end; 
+	pair<vertex_t, vertex_t> shared;
+	for (tie(ei, ei_end) = edges(g); ei != ei_end; ++ei){
+		shared = shared_neighbors(*ei, g);
+		eb_map[*ei] = (shared.first == null_vertex || shared.second == null_vertex);
+		if (eb_map[*ei]){
+			vb_map[source(*ei, g)] = true;
+			vb_map[target(*ei, g)] = true;
+		}
+	}			
+}
+
+template<typename boundary_vertex_map_t, typename boundary_edge_map_t, typename graph_t>
+void boundary_based_two_factor(boundary_vertex_map_t &vb_map, boundary_edge_map_t &eb_map, graph_t &g){
+	boundary_graph(vb_map, eb_map, g);
+	extend_cycle(vb_map, eb_map, g);	
+}
+
+// Determines the number of components in the twofactor
+
+template<typename tf_edge_map_t, typename graph_t>
+int two_factor_components(tf_edge_map_t &etf_map, graph_t &g){
+	//two_factor_map_t tfmap = get(edge_in_two_factor, G);
+	two_factor_filter<tf_edge_map_t> filter(etf_map);
+	filtered_graph<graph_t, two_factor_filter<tf_edge_map_t> >
+		fg(g, filter);
+	
+	std::vector<int> component(num_vertices(fg));
+	return connected_components(fg, &component[0]);
+}
+
+template<typename tf_edge_map_t, typename graph_t>
+int two_factor_components(tf_edge_map_t &etf_map, graph_t &g, vector<int> &component){
+	//two_factor_map_t tfmap = get(edge_in_two_factor, G);
+	two_factor_filter<tf_edge_map_t> filter(etf_map);
+	filtered_graph<graph_t, two_factor_filter<tf_edge_map_t> >
+		fg(g, filter);
+	
+	component.clear();
+	component.resize(num_vertices(fg));
+	return connected_components(fg, &component[0]);
+}
+
+template<typename tf_vertex_map_t, typename tf_edge_map_t, typename graph_t>
+list<pair<typename graph_traits<graph_t>::edge_descriptor, typename graph_traits<graph_t>::edge_descriptor> > 
+get_boundary_parallelograms(tf_vertex_map_t &vtf_map, tf_edge_map_t &etf_map, graph_t &g){
+	typedef typename graph_traits<graph_t>::edge_descriptor edge_t;
+	vector<int> component;
+	int n = two_factor_components(etf_map, g, component);
+	list<pair<edge_t, edge_t> > parallelograms;
+	if (n <= 1)
+		return parallelograms;
+	
+	typedef typename graph_traits<graph_t>::edge_iterator edge_iter_t;
+	edge_iter_t ei, ei_end, ej, ej_end; 
+	
+	for (tie(ei, ei_end) = edges(g); ei != ei_end; ++ei){
+		for (tie(ej, ej_end) = edges(g); ej != ei; ++ej){
+			if (is_parallelogram(*ei, *ej, g) && 
+					component[source(*ei, g)] == component[target(*ei, g)] &&
+					component[source(*ej, g)] == component[target(*ej, g)] &&
+					component[source(*ei, g)] != component[source(*ej, g)])
+				parallelograms.push_back(make_pair(*ei, *ej));
+		}
+	}
+	return parallelograms;
+}
+
+template<typename component_graph_t, typename tf_vertex_map_t, typename tf_edge_map_t, typename graph_t>
+component_graph_t get_component_graph(tf_vertex_map_t &vtf_map, tf_edge_map_t &etf_map, graph_t &g){
+	//typedef adjacency_list<vecS, vecS, undirectedS, property<vertex_name_t, int> > component_graph_t;
+	typedef typename graph_traits<component_graph_t>::vertex_descriptor component_vertex_t;
+	typedef typename graph_traits<graph_t>::vertex_descriptor vertex_t;
+	typedef typename graph_traits<graph_t>::edge_descriptor edge_t;
+	
+	vector<int> component;
+	int k = two_factor_components(etf_map, g, component);
+	cout << "k = " << k << endl;
+	component_graph_t cg;
+	vector<component_vertex_t> component_id_to_vertex(k);
+	
+	component_vertex_t v;
+	for(int i=0; i<k; i++){
+		v = add_vertex(i, cg);
+		cout << "Added " << v << " corresponding to " << i << endl;
+		component_id_to_vertex[i] = v;
+	}
+	cout << "Done!\n";
+	list<pair<edge_t, edge_t> > pars = get_boundary_parallelograms(vtf_map, etf_map, g);
+	cout << "Got boundary parallelograms.\n";
+	int x, y;
+	int i = 0;
+	for(typename list<pair<edge_t, edge_t> >::iterator pi = pars.begin(); pi != pars.end(); ++pi){
+		x = component[source((*pi).first, g)];
+		y = component[source((*pi).second, g)];
+		if (!edge(component_id_to_vertex[x], component_id_to_vertex[y], cg).second){
+			cout << "Adding edge (" << x << "," << y << ")\n";
+			add_edge(component_id_to_vertex[x], component_id_to_vertex[y], i, cg);
+			i++;
+		}
+	}
+	return cg;
+}
+
+template<typename edge_t, typename tf_vertex_map_t, typename tf_edge_map_t, typename graph_t>
+bool merge_at_boundary_parallelogram(edge_t &e1, edge_t &e2, tf_vertex_map_t &vtf_map, tf_edge_map_t &etf_map, graph_t &g){
+	if (!is_parallelogram(e1, e2, g))
+		return false;
+	
+	typedef typename graph_traits<graph_t>::vertex_descriptor vertex_t;
+		
+	vector<edge_t> alt_kiss_cycle;
+	
+	if (!etf_map[e1]){
+		alt_kiss_cycle = bolt_or_hourglass(e1, vtf_map, etf_map, g);
+		if (alt_kiss_cycle.empty()){
+			optional<pair<edge_t, edge_t> > es = cycle_out_edges(source(e1, g), vtf_map, etf_map, g);
+			assert(es.is_initialized());
+			if (is_parallelogram(e2, es.get().first, g))
+				e1 = es.get().first;
+			else if (is_parallelogram(e2, es.get().second, g))
+				e1 = es.get().second;
+			else {
+				es = cycle_out_edges(target(e1, g), vtf_map, etf_map, g);
+				assert(es.is_initialized());
+				if (is_parallelogram(e2, es.get().first, g))
+					e1 = es.get().first;
+				else if (is_parallelogram(e2, es.get().second, g))
+					e1 = es.get().second;
+				else
+					return false;
+			}
+		}
+		else
+			flip(alt_kiss_cycle, etf_map, g);
+	}
+	
+	if (!etf_map[e2]){
+		alt_kiss_cycle = bolt_or_hourglass(e2, vtf_map, etf_map, g);
+		if (alt_kiss_cycle.empty()){
+			optional<pair<edge_t, edge_t> > es = cycle_out_edges(source(e2, g), vtf_map, etf_map, g);
+			assert(es.is_initialized());
+			if (is_parallelogram(e1, es.get().first, g))
+				e2 = es.get().first;
+			else if (is_parallelogram(e1, es.get().second, g))
+				e2 = es.get().second;
+			else {
+				es = cycle_out_edges(target(e2, g), vtf_map, etf_map, g);
+				assert(es.is_initialized());
+				if (is_parallelogram(e1, es.get().first, g))
+					e2 = es.get().first;
+				else if (is_parallelogram(e1, es.get().second, g))
+					e2 = es.get().second;
+				else
+					return false;
+			}
+		}
+		else
+			flip(alt_kiss_cycle, etf_map, g);
+	}
+	
+	if (!(etf_map[e1] && etf_map[e2]))
+		return false;
+	
+	alt_kiss_cycle = parallelogram(e1, e2, g);
+	assert(!alt_kiss_cycle.empty());
+	flip(alt_kiss_cycle, etf_map, g);
+	return true;
+}
+
+template<typename tf_vertex_map_t, typename tf_edge_map_t, typename graph_t>
+bool merge_all_components(tf_vertex_map_t &vtf_map, tf_edge_map_t &etf_map, graph_t &g){
+	
+	vector<int> component;
+	int k = two_factor_components(etf_map, g, component);
+	if (k == 1)
+		return true;
+	if (k == 0)
+		return false;
+	
+	typedef typename graph_traits<graph_t>::edge_descriptor edge_t;
+	typedef adjacency_list<vecS, vecS, undirectedS, property<vertex_index_t, int, 
+																									property<vertex_name_t, int> >,
+																									property<edge_index_t, size_t> 
+																									> c_graph_t;
+																									
+	c_graph_t cg;
+	vector<graph_traits<c_graph_t>::vertex_descriptor> component_id_to_vertex(k);
+	
+	graph_traits<c_graph_t>::vertex_descriptor v;
+	for(int i=0; i<k; i++){
+		v = add_vertex(i, cg);
+		put(vertex_name, cg, v, i);
+		component_id_to_vertex[i] = v;
+	}
+	
+	list<pair<edge_t, edge_t> > pars = get_boundary_parallelograms(vtf_map, etf_map, g);
+
+	int x, y;
+	int i = 0;
+	
+	//shared_array_property_map<bool, property_map<c_graph_t, edge_index_t>::const_type> is_set(num_vertices(cg), get(edge_index, cg));
+	
+	
+	//shared_array_property_map<string, property_map<c_graph_t, edge_index_t> > par_map(num_edges(cg), get(edge_index, cg));
+	vector_property_map<pair<edge_t, edge_t> > par_map;
+	
+	graph_traits<c_graph_t>::edge_descriptor e;
+	pair<edge_t, edge_t> p;
+	for(typename list<pair<edge_t, edge_t> >::iterator pi = pars.begin(); pi != pars.end(); ++pi){
+		x = component[source((*pi).first, g)];
+		y = component[source((*pi).second, g)];
+		if (!edge(component_id_to_vertex[x], component_id_to_vertex[y], cg).second){
+			e = add_edge(component_id_to_vertex[x], component_id_to_vertex[y], i, cg).first;
+			par_map[get(edge_index, cg, e)] = *pi;
+			i++;
+		}
+		else{
+			e = edge(component_id_to_vertex[x], component_id_to_vertex[y], cg).first;
+			p = par_map[get(edge_index, cg, e)];
+			if ((!etf_map[p.first] && !etf_map[p.second]) && (etf_map[(*pi).first] || etf_map[(*pi).second]))
+				par_map[get(edge_index, cg, e)] = *pi;
+			else if ((!etf_map[p.first] || !etf_map[p.second]) && (etf_map[(*pi).first] && etf_map[(*pi).second]))
+				par_map[get(edge_index, cg, e)] = *pi;
+		}
+	}
+	
+	shared_array_property_map<graph_traits<c_graph_t>::vertex_descriptor, property_map<c_graph_t, vertex_index_t>::const_type> pred(num_vertices(cg), get(vertex_index, cg));
+	mt19937 random_generator;		
+	random_spanning_tree(cg, random_generator, predecessor_map(pred));
+	
+	graph_traits<c_graph_t>::edge_iterator ei, ei_end;
+	for(tie(ei,ei_end)=edges(cg); ei!=ei_end; ++ei){
+		if (!(get(pred, source(*ei, cg)) == target(*ei, cg) || get(pred, target(*ei, cg)) == source(*ei, cg)))
+			continue;
+		
+		p = par_map[get(edge_index, cg, *ei)];
+		cout << "Merging at " << edge_str(p.first, g) << " and " << edge_str(p.second, g) << endl;
+		if (!merge_at_boundary_parallelogram(p.first, p.second, vtf_map, etf_map, g)){
+			cout << "Failed at " << edge_str(p.first, g) << " and " << edge_str(p.second, g) << endl;
+			return false;
+		}
+	}
+	
+	return true;
 }
 #endif
