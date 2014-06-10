@@ -21,7 +21,7 @@
 #include <boost/graph/copy.hpp>
 #include <boost/graph/graph_utility.hpp>
 #include <boost/graph/connected_components.hpp>*/
-#include "../triangular_grid_graph.hpp"
+#include "../hamiltonian_cycle.hpp"
 
 using namespace std;
 using namespace boost;
